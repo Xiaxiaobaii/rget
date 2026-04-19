@@ -1,0 +1,30 @@
+[package]
+name = "rget"
+version = "1.0.0"
+edition = "2024"
+description = "使用 Rust 编写的多线程文件下载工具，支持断点续传，自动重试，批量下载，代理，抗指纹"
+
+[dependencies]
+tokio = { version = "1.50.0", features = ["rt-multi-thread", "macros", "signal"] }
+clap = { version = "4.5.60", features = ["derive"] }
+indicatif = { version = "0.17.8", features = ["tokio"] }
+futures = "0.3.31"
+regex = "1.10.6"
+serde_json = "1.0.146"
+serde = "1.0.228"
+anyhow = "1.0.100"
+percent-encoding = "2.3.1"
+rquest = { version = "5.1.0", features = ["stream", "socks"] }
+encoding = "0.2.33"
+dashmap = { version = "6.1.0", features = ["serde", "inline"] }
+sha256 = "1.6.0"
+crossfire = "2.1.8"
+rquest-util = "2.2.1"
+
+[profile.release]
+strip = true
+lto = true
+opt-level = 3
+codegen-units = 1
+debug = 0
+panic = "abort"
