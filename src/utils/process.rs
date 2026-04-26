@@ -2,8 +2,8 @@ use crossfire::MTx;
 use futures::StreamExt;
 use indicatif::{ProgressBar, ProgressStyle};
 use rquest::{
-    header::{HeaderMap, RANGE},
     Response,
+    header::{HeaderMap, RANGE},
 };
 use std::fs::File;
 use std::{io::Write, path::PathBuf};
@@ -31,12 +31,14 @@ pub struct Process {
 }
 
 pub fn create_bar(size: u64) -> ProgressBar {
-    if let Ok(mut style) = ProgressStyle::with_template("{spinner:.green} [{elapsed_precise}] [{bar:50.cyan/blue}] {msg:<13} {decimal_bytes_per_sec} {bytes:>8}/{total_bytes} ({eta})") {
+    if let Ok(mut style) = ProgressStyle::with_template(
+        "{spinner:.green} [{elapsed_precise}] [{bar:50.cyan/blue}] {msg:<13} {decimal_bytes_per_sec} {bytes:>8}/{total_bytes} ({eta})",
+    ) {
         style = style.progress_chars("==>");
         let bar = ProgressBar::new(size);
         bar.set_style(style);
         bar
-    }else {
+    } else {
         process::exit(888)
     }
 }
@@ -56,7 +58,6 @@ impl Process {
         let end_eto = ETO.get(&id).expect("core error, this is not we error.");
         let mut client = client::ControlClient::no_self_create_client(header.clone())?;
 
-        
         loop {
             let mut err = false;
             let range = format!("bytes={}-{}", next_ato.load(Relaxed), end_eto.load(Relaxed));
@@ -75,7 +76,6 @@ impl Process {
                         match block {
                             Ok(block) => {
                                 #[cfg(unix)]
-                                
                                 file.write_at(&block, next_pos)?;
                                 #[cfg(windows)]
                                 file.seek_write(&block, next_pos)?;

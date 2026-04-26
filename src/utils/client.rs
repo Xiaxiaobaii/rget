@@ -2,9 +2,9 @@ use std::time::Duration;
 
 use crate::utils::config::EMULATION;
 
-use super::config::{CONFIG};
+use super::config::CONFIG;
 use anyhow::{Error, Ok};
-use rquest::{header::HeaderMap, redirect::Policy, Client, ClientBuilder, Proxy};
+use rquest::{Client, ClientBuilder, Proxy, header::HeaderMap, redirect::Policy};
 use rquest_util::Emulation;
 
 pub struct ControlClient {

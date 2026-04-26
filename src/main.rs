@@ -1,12 +1,9 @@
-
 use encoding::DecoderTrap::Strict;
+use std::io::{BufRead, BufReader};
 use tokio::{fs::File, io::AsyncReadExt};
-use std::{
-    io::{BufRead, BufReader},
-};
 use utils::{
     client::ControlClient,
-    config::{utf16_decode, CONFIG, LABELS},
+    config::{CONFIG, LABELS, utf16_decode},
     task::{self},
 };
 
@@ -22,24 +19,24 @@ async fn main() -> anyhow::Result<()> {
         println!("已启用debug");
     }
     if let Some(file) = CONFIG.file.clone() {
-        
         let mut file = File::open(file).await?;
         let mut buf = vec![];
         file.read_to_end(&mut buf).await?;
-        let text_buf = String::from_utf8(buf.clone()).ok()
-        .or_else(|| utf16_decode(&buf, Strict).ok())
-        .or_else(|| {
-            LABELS.iter().find_map(|x| {
-                encoding::label::encoding_from_whatwg_label(x)
-                    .unwrap()
-                    .decode(&buf, Strict)
-                    .ok()
+        let text_buf = String::from_utf8(buf.clone())
+            .ok()
+            .or_else(|| utf16_decode(&buf, Strict).ok())
+            .or_else(|| {
+                LABELS.iter().find_map(|x| {
+                    encoding::label::encoding_from_whatwg_label(x)
+                        .unwrap()
+                        .decode(&buf, Strict)
+                        .ok()
+                })
             })
-        })
-        .expect("file encoding is Unsupport");
+            .expect("file encoding is Unsupport");
         let reader = BufReader::new(text_buf.as_bytes());
         let mut task = Task::create_task();
-        
+
         for line in reader.lines() {
             if CONFIG.debug {
                 println!("{:?}", line);
@@ -63,5 +60,4 @@ async fn main() -> anyhow::Result<()> {
         };
     }
     Ok(())
-
 }

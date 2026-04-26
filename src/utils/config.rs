@@ -2,13 +2,13 @@ use std::{borrow::Cow, collections::HashMap, sync::LazyLock};
 
 use clap::Parser;
 use encoding::{
-    all::{UTF_16BE, UTF_16LE},
     DecoderTrap, Encoding,
+    all::{UTF_16BE, UTF_16LE},
 };
 use indicatif::MultiProgress;
 use regex::Regex;
-use rquest::{
-    header::{HeaderMap, HeaderName, ACCEPT, ACCEPT_ENCODING, ACCEPT_LANGUAGE, COOKIE, USER_AGENT},
+use rquest::header::{
+    ACCEPT, ACCEPT_ENCODING, ACCEPT_LANGUAGE, COOKIE, HeaderMap, HeaderName, USER_AGENT,
 };
 use rquest_util::Emulation;
 use serde::{Deserialize, Serialize};
@@ -17,9 +17,8 @@ pub static MP: LazyLock<MultiProgress> = LazyLock::new(MultiProgress::new);
 
 pub static CONFIG: LazyLock<Config> = LazyLock::new(Config::parse);
 
-pub static RE_FILENAME: LazyLock<Regex> = LazyLock::new(|| {
-    regex::Regex::new("filename=\"?([^;\"]*)\"?;?").unwrap()
-});
+pub static RE_FILENAME: LazyLock<Regex> =
+    LazyLock::new(|| regex::Regex::new("filename=\"?([^;\"]*)\"?;?").unwrap());
 
 pub static EMULATION: LazyLock<HashMap<String, Emulation>> = LazyLock::new(|| {
     let mut map = HashMap::with_capacity(10);

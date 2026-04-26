@@ -5,26 +5,37 @@ use dashmap::DashMap;
 use futures::StreamExt;
 use indicatif::HumanBytes;
 use rquest::{
-    header::{HeaderMap, ACCEPT_RANGES, CONTENT_DISPOSITION, CONTENT_LENGTH, CONTENT_RANGE},
     Client, StatusCode,
+    header::{ACCEPT_RANGES, CONTENT_DISPOSITION, CONTENT_LENGTH, CONTENT_RANGE, HeaderMap},
 };
 use serde::{Deserialize, Serialize};
-use tokio::{fs::{self, File, OpenOptions}, io::{AsyncReadExt, AsyncWriteExt}, task::JoinHandle};
-use std::{sync::{LazyLock, atomic::Ordering::Relaxed}, thread};
 use std::{
     collections::HashMap,
     env::temp_dir,
     path::{Path, PathBuf},
     process::{self},
-    sync::{atomic::AtomicU64, Arc},
+    sync::{Arc, atomic::AtomicU64},
     time::{Duration, Instant},
+};
+use std::{
+    sync::{LazyLock, atomic::Ordering::Relaxed},
+    thread,
+};
+use tokio::{
+    fs::{self, File, OpenOptions},
+    io::{AsyncReadExt, AsyncWriteExt},
+    task::JoinHandle,
 };
 
 use sha256::try_digest;
 #[cfg(target_family = "unix")]
 use tokio::signal::unix::SignalKind;
 
-use crate::utils::{client::ControlClient, config::{CONFIG, RE_FILENAME}, process::create_bar};
+use crate::utils::{
+    client::ControlClient,
+    config::{CONFIG, RE_FILENAME},
+    process::create_bar,
+};
 
 use super::{client, config::Config, process::Process};
 
@@ -99,7 +110,7 @@ impl Task {
         if let Some(name) = &self.file_name {
             return Ok(name.clone());
         }
-        
+
         let urls = &self.url;
         if let Some(last) = urls
             .split('/')
@@ -161,7 +172,6 @@ impl Task {
         &mut self,
         conclient: &ControlClient,
     ) -> Result<(bool, Option<u64>), anyhow::Error> {
-        
         let mut header = conclient.header.clone();
         header.append("range", "bytes=0-".parse()?);
         let client = ControlClient::no_self_create_client(header)?;
@@ -215,15 +225,14 @@ impl Task {
         file_size: Option<u64>,
         mut header: HeaderMap,
     ) -> anyhow::Result<()> {
-        
-        if let Ok(file) = tokio::fs::File::open(temp_dir().join(json_fix_name(self.filename()?))).await {
+        if let Ok(file) =
+            tokio::fs::File::open(temp_dir().join(json_fix_name(self.filename()?))).await
+        {
             if self.delete_stat {
                 println!("该文件允许断点续传，但您使用参数禁止了.");
             } else {
                 match self.downloaded(&mut header, file).await {
-                    Ok(_) => {
-                        return Ok(())
-                    }
+                    Ok(_) => return Ok(()),
                     Err(err) => {
                         println!("断点续传错误! {err}\n转向正常下载....")
                     }
@@ -270,15 +279,15 @@ impl Task {
             while let Some(block) = stream.next().await {
                 let block = block?;
                 let chunk_length = block.len() as u64;
-                    match file.write_all(&block).await {
-                        Ok(_) => {
-                            break;
-                        }
-                        Err(err) => {
-                            println!("request timing err: {}", err);
-                            thread::sleep(Duration::from_millis(500));
-                        }
+                match file.write_all(&block).await {
+                    Ok(_) => {
+                        break;
                     }
+                    Err(err) => {
+                        println!("request timing err: {}", err);
+                        thread::sleep(Duration::from_millis(500));
+                    }
+                }
                 bar.inc(chunk_length);
             }
             file.flush().await?;
@@ -308,7 +317,11 @@ impl Task {
         })
     }
 
-    pub async fn downloaded(&self, header: &mut HeaderMap, mut file: tokio::fs::File) -> anyhow::Result<()> {
+    pub async fn downloaded(
+        &self,
+        header: &mut HeaderMap,
+        mut file: tokio::fs::File,
+    ) -> anyhow::Result<()> {
         println!("断点续传连接中....");
         let mut s = String::new();
         file.read_to_string(&mut s).await?;
@@ -316,7 +329,7 @@ impl Task {
         let ato: DashMap<u64, u64> = serde_json::from_str(&sj.ato)?;
         let eto: DashMap<u64, u64> = serde_json::from_str(&sj.eto)?;
         if ato.is_empty() || ato.len() != eto.len() {
-            return Err(anyhow::Error::msg("断点文件参数为0或不一致！"))
+            return Err(anyhow::Error::msg("断点文件参数为0或不一致！"));
         }
         for a in ato.into_iter() {
             ATO.insert(a.0, AtomicU64::new(a.1));
@@ -416,37 +429,40 @@ impl Task {
         self.output = None;
         self.retry = 5;
         self.file_name = None;
-        
     }
 
     pub async fn downloads(&self, header: &mut HeaderMap) -> anyhow::Result<()> {
-        
         let mut joins: Vec<tokio::task::JoinHandle<()>> = vec![];
 
         let (down_tx, down_rx) = crossfire::mpsc::unbounded_async::<u64>();
-        let one_bytes = ETO.iter().next().unwrap().load(Relaxed) - ATO.iter().next().unwrap().load(Relaxed);
+        let one_bytes =
+            ETO.iter().next().unwrap().load(Relaxed) - ATO.iter().next().unwrap().load(Relaxed);
         let file = std::fs::OpenOptions::new()
             .truncate(false)
             .write(true)
             .create(true)
             .open(self.save_path()?)?;
-        
+
         for call in ATO.iter() {
             let (k, _) = call.pair();
             let k = *k;
             let mut block = self.create_process()?;
             let header = header.clone();
             let down_tx = down_tx.clone();
-            
+
             let mut file = file.try_clone()?;
             joins.push(tokio::spawn(async move {
-                while block.download(k, &header, &down_tx, &mut file).await.is_err() {};
+                while block
+                    .download(k, &header, &down_tx, &mut file)
+                    .await
+                    .is_err()
+                {}
                 drop(down_tx);
             }));
         }
         let mut _file = file.try_clone()?;
         self.downed_for(_file);
-        if one_bytes < CONFIG.resumd_min_body*1024 {
+        if one_bytes < CONFIG.resumd_min_body * 1024 {
             for i in joins {
                 let _ = i.await;
             }
@@ -519,7 +535,11 @@ impl Task {
                 let mut file = bound.file.try_clone()?;
 
                 bound.joins.push(tokio::spawn(async move {
-                    while block.download(new_id, &header, &down_tx, &mut file).await.is_err() {};
+                    while block
+                        .download(new_id, &header, &down_tx, &mut file)
+                        .await
+                        .is_err()
+                    {}
                     drop(down_tx);
                 }));
             }
@@ -537,7 +557,8 @@ impl Task {
                 .truncate(false)
                 .write(true)
                 .create(true)
-                .open(temp_dir().join(json_fix_name(file_name))).await;
+                .open(temp_dir().join(json_fix_name(file_name)))
+                .await;
             let ato: DashMap<u64, u64> = DashMap::new();
             let eto = DashMap::new();
             for i in ATO.iter().enumerate() {
@@ -553,7 +574,8 @@ impl Task {
                 eto: serde_json::to_string(&eto).unwrap(),
             };
             if let Ok(f) = over {
-                if let Err(err) = ff.serialize(&mut serde_json::Serializer::new(f.into_std().await)) {
+                if let Err(err) = ff.serialize(&mut serde_json::Serializer::new(f.into_std().await))
+                {
                     println!("save err: {err}");
                 } else {
                     println!("已保存断点文件数据， 再次下载会自动尝试续传!");
@@ -581,7 +603,6 @@ struct Sjson {
 
 #[cfg(target_family = "unix")]
 pub async fn stop_signal() {
-    
     let mut sigint = tokio::signal::unix::signal(SignalKind::interrupt()).unwrap();
     let mut sighup = tokio::signal::unix::signal(SignalKind::hangup()).unwrap();
     let mut sigterm = tokio::signal::unix::signal(SignalKind::terminate()).unwrap();
@@ -594,7 +615,9 @@ pub async fn stop_signal() {
 
 #[cfg(target_family = "windows")]
 pub async fn stop_signal() {
-    tokio::signal::ctrl_c().await.expect("core error, this is not we error.");
+    tokio::signal::ctrl_c()
+        .await
+        .expect("core error, this is not we error.");
 }
 
 pub fn json_fix_name(file_name: String) -> String {
