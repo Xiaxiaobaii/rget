@@ -57,7 +57,7 @@ impl Process {
         //函数id在执行前均硬性保证插入到ATO/ETO中.
         let next_ato = ATO.get(&id).unwrap();
         let end_eto = ETO.get(&id).unwrap();
-        let mut client = client::ControlClient::no_self_create_client(header.clone())?;
+        let client = client::ControlClient::no_self_create_client(header.clone())?;
 
         loop {
             let mut err = false;
@@ -108,7 +108,6 @@ impl Process {
 
                 Err(err) => {
                     self.retry += 1;
-                    client = client::ControlClient::no_self_create_client(header.clone())?;
                     if self.retry >= self.max_retry {
                         panic!("process download timer faild: {err}");
                     }

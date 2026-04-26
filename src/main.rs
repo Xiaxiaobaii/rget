@@ -8,7 +8,7 @@ use utils::{
     task::{self},
 };
 
-use crate::utils::task::Task;
+use crate::utils::task::{ATO, ETO, Task};
 
 pub mod utils;
 
@@ -51,6 +51,8 @@ async fn main() -> anyhow::Result<()> {
             if let Err(err) = task.download(&client).await {
                 eprintln!("download err: {err}")
             }
+            ATO.clear();
+            ETO.clear();
         }
     } else {
         let mut tas = task::Task::create_task();

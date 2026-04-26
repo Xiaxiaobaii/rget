@@ -19,7 +19,6 @@ use std::{
 };
 use std::{
     sync::{LazyLock, atomic::Ordering::Relaxed},
-    thread,
 };
 use tokio::{
     fs::{self, File, OpenOptions},
@@ -280,12 +279,10 @@ impl Task {
                 let block = block?;
                 let chunk_length = block.len() as u64;
                 match file.write_all(&block).await {
-                    Ok(_) => {
-                        break;
-                    }
+                    Ok(_) => {}
                     Err(err) => {
                         println!("request timing err: {}", err);
-                        thread::sleep(Duration::from_millis(500));
+                        tokio::time::sleep(Duration::from_millis(500)).await;
                     }
                 }
                 bar.inc(chunk_length);
@@ -398,7 +395,7 @@ impl Task {
             println!("下载完成!\n总用时: {:.2}s", cost);
         }
         if CONFIG.sha256 {
-            let sha = try_digest(Path::new(&self.filename()?))?;
+            let sha = try_digest(Path::new(&self.save_path()?))?;
             println!("sha256校验值: {}", sha);
         }
 
@@ -523,7 +520,7 @@ impl Task {
                 }
                 //重新分配给旧线程的end_pos
                 let old_pos = space_over + max_pos.1;
-
+                ETO.insert(max_id, AtomicU64::new(old_pos));
                 let new_id = bound.basic_id + max_id;
                 ATO.insert(new_id, AtomicU64::new(old_pos + 1));
                 ETO.insert(new_id, AtomicU64::new(max_pos.0));
@@ -624,7 +621,6 @@ pub async fn stop_signal() {
 pub fn json_fix_name(file_name: String) -> String {
     let split_coll: Vec<&str> = file_name.split(".").collect();
     let q_name = split_coll.join("");
-
     q_name + ".json"
 }
 
