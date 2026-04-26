@@ -436,7 +436,7 @@ impl Task {
 
         let (down_tx, down_rx) = crossfire::mpsc::unbounded_async::<u64>();
         let one_bytes =
-            ETO.iter().next().unwrap().load(Relaxed) - ATO.iter().next().unwrap().load(Relaxed);
+            ETO.iter().next().expect("断点备份文件有问题或链接返回数据出错").load(Relaxed) - ATO.iter().next().unwrap().load(Relaxed);
         let file = std::fs::OpenOptions::new()
             .truncate(false)
             .write(true)
@@ -461,7 +461,7 @@ impl Task {
             }));
         }
         let mut _file = file.try_clone()?;
-        self.downed_for(_file);
+        self.downed_for(_file)?;
         if one_bytes < CONFIG.resumd_min_body * 1024 {
             for i in joins {
                 let _ = i.await;
@@ -547,8 +547,8 @@ impl Task {
         Ok(bound.joins)
     }
 
-    fn downed_for(&self, file: std::fs::File) {
-        let file_name = self.filename().unwrap();
+    fn downed_for(&self, file: std::fs::File) -> anyhow::Result<()> {
+        let file_name = self.filename()?;
 
         tokio::spawn(async move {
             stop_signal().await;
@@ -592,6 +592,7 @@ impl Task {
             file.sync_all().unwrap();
             process::exit(1);
         });
+        Ok(())
     }
 }
 

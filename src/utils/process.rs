@@ -54,8 +54,9 @@ impl Process {
         //start_pos: 线程创建时被分配的初始下载位置
         //end_pos: 被分配的结束下载位置
         //next_pos: 线程在整个文件线上的进度
-        let next_ato = ATO.get(&id).expect("core error, this is not we error.");
-        let end_eto = ETO.get(&id).expect("core error, this is not we error.");
+        //函数id在执行前均硬性保证插入到ATO/ETO中.
+        let next_ato = ATO.get(&id).unwrap();
+        let end_eto = ETO.get(&id).unwrap();
         let mut client = client::ControlClient::no_self_create_client(header.clone())?;
 
         loop {

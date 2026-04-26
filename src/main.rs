@@ -1,3 +1,4 @@
+use anyhow::Context;
 use encoding::DecoderTrap::Strict;
 use std::io::{BufRead, BufReader};
 use tokio::{fs::File, io::AsyncReadExt};
@@ -28,6 +29,7 @@ async fn main() -> anyhow::Result<()> {
             .or_else(|| {
                 LABELS.iter().find_map(|x| {
                     encoding::label::encoding_from_whatwg_label(x)
+                        .context("编码表中无法找到该文件编码.")
                         .unwrap()
                         .decode(&buf, Strict)
                         .ok()
