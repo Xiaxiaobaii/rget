@@ -155,7 +155,7 @@ impl Config {
         let mut header = HeaderMap::new();
         header.insert("priority", "u=0, i".parse()?);
         header.insert(ACCEPT, "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7".parse()?);
-        header.insert(ACCEPT_ENCODING, "gzip, deflate, br, zstd".parse()?);
+        header.insert(ACCEPT_ENCODING, "gzip, deflate".parse()?);
         header.insert(
             ACCEPT_LANGUAGE,
             "zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6".parse()?,

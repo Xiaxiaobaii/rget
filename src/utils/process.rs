@@ -70,6 +70,7 @@ impl Process {
 
             match resq {
                 Ok(resq) => {
+                    
                     let mut next_pos = next_ato.load(Relaxed);
                     let bar = MP.add(create_bar(end_eto.load(Relaxed) - next_pos));
                     let mut stream = resq.bytes_stream();

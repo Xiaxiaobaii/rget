@@ -291,7 +291,7 @@ impl Task {
             bar.finish_with_message("download success!");
             Ok(0)
         } else {
-            let bar = create_bar(107374182400);
+            let bar = create_bar(u64::MAX);
             let mut stream = resq.bytes_stream();
             let mut content_length: u64 = 0;
             while let Some(chunk) = stream.next().await {
