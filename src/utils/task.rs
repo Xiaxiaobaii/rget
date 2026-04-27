@@ -254,7 +254,7 @@ impl Task {
                 ATO.insert(i as u64, AtomicU64::new(start));
                 ETO.insert(i as u64, AtomicU64::new(end));
             }
-            self.downloads(&mut header).await?;
+            self.downloads(&mut header, block_size).await?;
         } else if CONFIG.force_thread {
             return Err(Error::msg(
                 "强制使用多线程，但文件并未提供大小，无法进行多线程下载",
@@ -334,8 +334,14 @@ impl Task {
         for e in eto.into_iter() {
             ETO.insert(e.0, AtomicU64::new(e.1));
         }
-        self.downloads(header).await?;
-
+        let a = ETO.iter().next().unwrap();
+        let b = ATO.get(a.key()).expect("断点文件有错误！");
+        let a = a.value().load(Relaxed);
+        let b = b.value().load(Relaxed);
+        if b > a {
+            return Err(anyhow::Error::msg("断点文件参数错误！"));
+        }
+        self.downloads(header, a - b).await?;
         Ok(())
     }
 
@@ -428,12 +434,10 @@ impl Task {
         self.file_name = None;
     }
 
-    pub async fn downloads(&self, header: &mut HeaderMap) -> anyhow::Result<()> {
+    pub async fn downloads(&self, header: &mut HeaderMap, one_bytes: u64) -> anyhow::Result<()> {
         let mut joins: Vec<tokio::task::JoinHandle<()>> = vec![];
 
         let (down_tx, down_rx) = crossfire::mpsc::unbounded_async::<u64>();
-        let one_bytes =
-            ETO.iter().next().expect("断点备份文件有问题或链接返回数据出错").load(Relaxed) - ATO.iter().next().unwrap().load(Relaxed);
         let file = std::fs::OpenOptions::new()
             .truncate(false)
             .write(true)
@@ -491,6 +495,7 @@ impl Task {
             if let Ok(id) = bound.down_rx.recv().await {
                 ATO.remove(&id);
                 ETO.remove(&id);
+                println!("收到{id}线程的完成信号, 剩余线程数: {}", ATO.len());
                 if ATO.is_empty() {
                     break;
                 }

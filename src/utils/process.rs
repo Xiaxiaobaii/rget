@@ -61,7 +61,8 @@ impl Process {
 
         loop {
             let mut err = false;
-            let range = format!("bytes={}-{}", next_ato.load(Relaxed), end_eto.load(Relaxed));
+            let mut back_eto = end_eto.load(Relaxed);
+            let range = format!("bytes={}-{}", next_ato.load(Relaxed), back_eto);
             let resq: Result<Response, rquest::Error> = if self.mode == HttpMode::GET {
                 client.get(&self.url).header(RANGE, &range).send().await
             } else {
@@ -72,7 +73,7 @@ impl Process {
                 Ok(resq) => {
                     
                     let mut next_pos = next_ato.load(Relaxed);
-                    let bar = MP.add(create_bar(end_eto.load(Relaxed) - next_pos));
+                    let bar = MP.add(create_bar(back_eto - next_pos));
                     let mut stream = resq.bytes_stream();
                     while let Some(block) = stream.next().await {
                         match block {
@@ -84,6 +85,9 @@ impl Process {
                                 let end_pos = end_eto.load(Relaxed);
                                 if end_pos == 0 {
                                     return Ok(());
+                                } else if end_pos != back_eto {
+                                    bar.set_length(end_pos - next_pos);
+                                    back_eto = end_eto.load(Relaxed);
                                 }
                                 next_pos += block.len() as u64;
                                 next_ato.store(next_pos, Relaxed);
