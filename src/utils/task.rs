@@ -9,6 +9,7 @@ use rquest::{
     header::{ACCEPT_RANGES, CONTENT_DISPOSITION, CONTENT_LENGTH, CONTENT_RANGE, HeaderMap},
 };
 use serde::{Deserialize, Serialize};
+use std::sync::{LazyLock, atomic::Ordering::Relaxed};
 use std::{
     collections::HashMap,
     env::temp_dir,
@@ -16,9 +17,6 @@ use std::{
     process::{self},
     sync::{Arc, atomic::AtomicU64},
     time::{Duration, Instant},
-};
-use std::{
-    sync::{LazyLock, atomic::Ordering::Relaxed},
 };
 use tokio::{
     fs::{self, File, OpenOptions},
