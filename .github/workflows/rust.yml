@@ -1,0 +1,34 @@
+name: Rust
+
+on:
+  push:
+    tags:
+      - "v*"
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Get version from tag
+      id: get_version
+      run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+      
+    - name: Build
+      run: cargo build --verbose --release
+      
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        token: ${{ secrets.GITHUBTOKEN }}
+        name: "Version ${{ steps.get_version.outputs.VERSION }} 🚀"
+        draft: false
+        prerelease: false
+        generate_release_notes: true
+        body_path: "changelog/v${{ steps.get_version.outputs.VERSION }}.md"
+        files: |
+          target/release/rget
