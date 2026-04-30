@@ -529,21 +529,19 @@ impl Task {
             stop_signal().await;
             let _ = fs::remove_file(temp_dir().join(json_fix_name(file_name.clone()))).await;
             let over = OpenOptions::new()
-                .truncate(false)
+                .truncate(true)
                 .write(true)
                 .create(true)
                 .open(temp_dir().join(json_fix_name(file_name)))
                 .await;
             let ato: DashMap<u64, u64> = DashMap::new();
             let eto = DashMap::new();
-            for i in ATO.iter().enumerate() {
-                let i = Box::leak(Box::new(i));
-                ato.insert(*i.1.key(), i.1.load(Relaxed));
-            }
-            for i in ETO.iter().enumerate() {
-                let i = Box::leak(Box::new(i));
-                eto.insert(i.1.key(), i.1.load(Relaxed));
-            }
+            ATO.iter().for_each(|i| {
+                ato.insert(*i.key(), i.load(Relaxed));
+            });
+            ETO.iter().for_each(|i| {
+                eto.insert(*i.key(), i.load(Relaxed));
+            });
             let ff = Sjson {
                 ato: serde_json::to_string(&ato).unwrap(),
                 eto: serde_json::to_string(&eto).unwrap(),

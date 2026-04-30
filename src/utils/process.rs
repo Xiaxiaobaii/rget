@@ -86,7 +86,7 @@ impl Process {
                     let mut next_pos = next_ato.load(Relaxed);
                     let bar = MP.add(create_bar(back_eto - next_pos));
                     let mut stream = resq.bytes_stream();
-                
+                    let mut pendbyte = 0;
                     while let Some(block) = stream.next().await {
                         match block {
                             Ok(block) => {
@@ -107,11 +107,16 @@ impl Process {
                                     back_eto = end_eto.load(Relaxed);
                                 }
                                 next_pos += len as u64;
+                                pendbyte += len;
                                 next_ato.store(next_pos, Relaxed);
                                 if next_pos >= end_pos {
+                                    bar.inc(pendbyte as u64);
                                     break;
+                                } else if pendbyte >= 1024 * 128 {
+                                    bar.inc(pendbyte as u64);
+                                    pendbyte = 0;
                                 }
-                                bar.inc(len as u64);
+                                
                             }
                             Err(_) => {
                                 err = true;
