@@ -86,7 +86,7 @@ pub struct Config {
 
     ///设置多线程下载使用线程数
     #[arg(short, long, default_value_t = 8)]
-    pub thread_size: u32,
+    pub thread_size: u64,
 
     ///禁用断点续传
     #[arg(short, long, default_value_t = false)]

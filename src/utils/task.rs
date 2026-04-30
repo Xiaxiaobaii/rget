@@ -16,7 +16,7 @@ use std::{
     path::{Path, PathBuf},
     process::{self},
     sync::{Arc, atomic::AtomicU64},
-    time::{Duration, Instant},
+    time::Instant,
 };
 use tokio::{
     fs::{self, File, OpenOptions},
@@ -48,7 +48,7 @@ pub struct Task {
 
     pub output: Option<String>,
 
-    pub thread_count: u32,
+    pub thread_count: u64,
 
     pub retry: u8,
 
@@ -240,19 +240,22 @@ impl Task {
             println!("文件大小: {:?}", file_size)
         }
         if let Some(file_size) = file_size {
-            let block_size = file_size / self.thread_count as u64;
+            if self.thread_count <= 0 {
+                self.thread_count = 1;
+            }
+            let block_size = file_size / self.thread_count;
 
             for i in 0..self.thread_count {
-                let start = if i == 0 { 0 } else { i as u64 * block_size + 1 };
+                let start = if i == 0 { 0 } else { i * block_size + 1 };
                 let end = if i == self.thread_count - 1 {
                     file_size - 1
                 } else {
-                    (i + 1) as u64 * block_size
+                    (i + 1) * block_size
                 };
-                ATO.insert(i as u64, AtomicU64::new(start));
-                ETO.insert(i as u64, AtomicU64::new(end));
+                ATO.insert(i, AtomicU64::new(start));
+                ETO.insert(i, AtomicU64::new(end));
             }
-            self.downloads(&mut header, block_size).await?;
+            self.downloads(&mut header, block_size, true).await?;
         } else if CONFIG.force_thread {
             return Err(Error::msg(
                 "强制使用多线程，但文件并未提供大小，无法进行多线程下载",
@@ -279,8 +282,8 @@ impl Task {
                 match file.write_all(&block).await {
                     Ok(_) => {}
                     Err(err) => {
-                        println!("request timing err: {}", err);
-                        tokio::time::sleep(Duration::from_millis(500)).await;
+                        println!("request err: {}", err);
+                        break;
                     }
                 }
                 bar.inc(chunk_length);
@@ -339,7 +342,7 @@ impl Task {
         if b > a {
             return Err(anyhow::Error::msg("断点文件参数错误！"));
         }
-        self.downloads(header, a - b).await?;
+        self.downloads(header, a - b, false).await?;
         Ok(())
     }
 
@@ -432,12 +435,12 @@ impl Task {
         self.file_name = None;
     }
 
-    pub async fn downloads(&self, header: &mut HeaderMap, one_bytes: u64) -> anyhow::Result<()> {
+    pub async fn downloads(&self, header: &mut HeaderMap, one_bytes: u64, truncate: bool) -> anyhow::Result<()> {
         let mut joins: Vec<tokio::task::JoinHandle<()>> = vec![];
 
         let (down_tx, down_rx) = crossfire::mpsc::unbounded_async::<u64>();
         let file = std::fs::OpenOptions::new()
-            .truncate(false)
+            .truncate(truncate)
             .write(true)
             .create(true)
             .open(self.save_path()?)?;
@@ -623,7 +626,7 @@ pub async fn stop_signal() {
 
 pub fn json_fix_name(file_name: String) -> String {
     let split_coll: Vec<&str> = file_name.split(".").collect();
-    let q_name = split_coll.join("");
+    let q_name = split_coll.join("_");
     q_name + ".json"
 }
 
