@@ -5,9 +5,10 @@ use rquest::{
     Response,
     header::{HeaderMap, RANGE},
 };
-use std::fs::File;
-use std::{io::Write, path::PathBuf};
+use std::{fs::File};
+use std::{path::PathBuf};
 use std::{process, sync::atomic::Ordering::Relaxed};
+use tokio::sync::mpsc::{channel};
 
 #[cfg(unix)]
 use std::os::unix::fs::FileExt;
@@ -58,7 +59,18 @@ impl Process {
         let next_ato = ATO.get(&id).unwrap();
         let end_eto = ETO.get(&id).unwrap();
         let client = client::ControlClient::no_self_create_client(header.clone())?;
-
+        let (send, mut recv) = channel::<(bytes::Bytes, u64)>(50);
+        let file = file.try_clone()?;
+        let writer = tokio::task::spawn_blocking(move || -> anyhow::Result<()> {
+            while let Some((block, offset)) = recv.blocking_recv() {
+                #[cfg(unix)]
+                file.write_at(&block, offset)?;
+                #[cfg(windows)]
+                file.seek_write(&block, next_pos)?;
+            }
+            file.sync_all()?;
+            Ok(())
+        });
         loop {
             let mut err = false;
             let mut back_eto = end_eto.load(Relaxed);
@@ -74,13 +86,19 @@ impl Process {
                     let mut next_pos = next_ato.load(Relaxed);
                     let bar = MP.add(create_bar(back_eto - next_pos));
                     let mut stream = resq.bytes_stream();
+                
                     while let Some(block) = stream.next().await {
                         match block {
                             Ok(block) => {
-                                #[cfg(unix)]
-                                file.write_at(&block, next_pos)?;
-                                #[cfg(windows)]
-                                file.seek_write(&block, next_pos)?;
+                                let len = block.len();
+                                if let Err(_) =  send.send((block, next_pos)).await {
+                                    let err = writer.await;
+                                    if let Err(err) = err {
+                                        return Err(err.into());
+                                    }else {
+                                        return Ok(());
+                                    }
+                                };
                                 let end_pos = end_eto.load(Relaxed);
                                 if end_pos == 0 {
                                     return Ok(());
@@ -88,12 +106,12 @@ impl Process {
                                     bar.set_length(end_pos - next_pos);
                                     back_eto = end_eto.load(Relaxed);
                                 }
-                                next_pos += block.len() as u64;
+                                next_pos += len as u64;
                                 next_ato.store(next_pos, Relaxed);
                                 if next_pos >= end_pos {
                                     break;
                                 }
-                                bar.inc(block.len() as u64);
+                                bar.inc(len as u64);
                             }
                             Err(_) => {
                                 err = true;
@@ -101,12 +119,14 @@ impl Process {
                             }
                         }
                     }
-                    file.flush()?;
+                    
                     bar.finish_and_clear();
                     if err {
                         continue;
                     }
                     down_tx.send(id)?;
+                    drop(send);
+                    let _ = writer.await;
                     break;
                 }
 

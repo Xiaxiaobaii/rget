@@ -1310,6 +1310,7 @@ name = "rget"
 version = "1.0.0"
 dependencies = [
  "anyhow",
+ "bytes",
  "clap",
  "crossfire",
  "dashmap",

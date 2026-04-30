@@ -5,7 +5,7 @@ edition = "2024"
 description = "使用 Rust 编写的多线程文件下载工具，支持断点续传，自动重试，批量下载，代理，抗指纹"
 
 [dependencies]
-tokio = { version = "1.50.0", features = ["rt-multi-thread", "macros", "signal"] }
+tokio = { version = "1.50.0", features = ["rt-multi-thread", "macros", "signal"]}
 clap = { version = "4.5.60", features = ["derive"] }
 indicatif = { version = "0.17.8", features = ["tokio"] }
 futures = "0.3.31"
@@ -20,6 +20,7 @@ dashmap = { version = "6.1.0", features = ["serde", "inline"] }
 sha256 = "1.6.0"
 crossfire = "2.1.8"
 rquest-util = "2.2.1"
+bytes = "1.11.1"
 
 [profile.release]
 strip = true

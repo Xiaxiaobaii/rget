@@ -60,33 +60,12 @@ pub struct Task {
 
     pub config_retry: bool,
 
-    pub extend: Extend,
+    pub file_size: u64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Seiki {
     server: HashMap<String, (u64, u64)>,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct Extend {
-    seiki_enable: bool,
-    seiki_server_list: HashMap<String, (u64, u64)>,
-}
-
-impl Extend {
-    pub fn new() -> Extend {
-        Extend {
-            seiki_enable: false,
-            seiki_server_list: HashMap::new(),
-        }
-    }
-}
-
-impl Default for Extend {
-    fn default() -> Self {
-        Self::new()
-    }
 }
 
 pub enum DownloadState {
@@ -140,14 +119,9 @@ impl Task {
         &mut self,
         headers: &HeaderMap,
     ) -> Result<(bool, Option<u64>), anyhow::Error> {
-        let is_seiki = headers.contains_key("seiki-enable");
-        if is_seiki {
-            self.extend.seiki_enable = true;
-        }
         let is_resumed = headers.contains_key(CONTENT_RANGE) || headers.contains_key(ACCEPT_RANGES);
         if let Some(length) = headers.get(CONTENT_DISPOSITION) {
             let length = String::from_utf8_lossy(length.as_bytes());
-
             RE_FILENAME.captures(&length).and_then(|stack| {
                 if let Some(k) = stack.get(1) {
                     println!("链接服务器提供下载文件名: {}", k.as_str());
@@ -210,9 +184,6 @@ impl Task {
                 } else {
                     con_try -= 1;
                 }
-            } else if self.extend.seiki_enable {
-                self.extend.seiki_server_list =
-                    serde_json::from_slice::<Seiki>(&resq.bytes().await?)?.server;
             }
         }
     }
@@ -240,6 +211,7 @@ impl Task {
             println!("文件大小: {:?}", file_size)
         }
         if let Some(file_size) = file_size {
+            self.file_size = file_size;
             if self.thread_count <= 0 {
                 self.thread_count = 1;
             }
@@ -377,7 +349,7 @@ impl Task {
         }
 
         let timer = Instant::now();
-        if (if_thread && !CONFIG.one_download) || CONFIG.force_thread || self.extend.seiki_enable {
+        if (if_thread && !CONFIG.one_download) || CONFIG.force_thread {
             println!("使用多线程下载");
             self.thread_download(file_size, client.header.clone())
                 .await?;
@@ -424,7 +396,7 @@ impl Task {
             file_name: None,
             delete_stat: config.delete_stat,
             config_retry: true,
-            extend: Extend::default(),
+            file_size: 0
         }
     }
 
@@ -444,6 +416,7 @@ impl Task {
             .write(true)
             .create(true)
             .open(self.save_path()?)?;
+        file.set_len(self.file_size)?;
 
         for call in ATO.iter() {
             let (k, _) = call.pair();
@@ -496,7 +469,6 @@ impl Task {
             if let Ok(id) = bound.down_rx.recv().await {
                 ATO.remove(&id);
                 ETO.remove(&id);
-                println!("收到{id}线程的完成信号, 剩余线程数: {}", ATO.len());
                 if ATO.is_empty() {
                     break;
                 }
