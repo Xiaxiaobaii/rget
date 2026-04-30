@@ -75,7 +75,6 @@ impl ControlClient {
     pub fn no_self_create_client(header: HeaderMap) -> anyhow::Result<Client> {
         Ok(ControlClient::create_client()?
             .default_headers(header)
-            .timeout(Duration::from_hours(48))
             .build()?)
     }
 }

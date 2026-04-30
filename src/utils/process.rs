@@ -66,13 +66,13 @@ impl Process {
                 #[cfg(unix)]
                 file.write_at(&block, offset)?;
                 #[cfg(windows)]
-                file.seek_write(&block, next_pos)?;
+                file.seek_write(&block, offset)?;
             }
             file.sync_all()?;
             Ok(())
         });
         loop {
-            let mut err = false;
+            let mut err = None;
             let mut back_eto = end_eto.load(Relaxed);
             let range = format!("bytes={}-{}", next_ato.load(Relaxed), back_eto);
             let resq: Result<Response, rquest::Error> = if self.mode == HttpMode::GET {
@@ -94,6 +94,7 @@ impl Process {
                                 if let Err(_) =  send.send((block, next_pos)).await {
                                     let err = writer.await;
                                     if let Err(err) = err {
+                                        bar.finish_and_clear();
                                         return Err(err.into());
                                     }else {
                                         return Ok(());
@@ -118,15 +119,20 @@ impl Process {
                                 }
                                 
                             }
-                            Err(_) => {
-                                err = true;
+                            Err(e) => {
+                                err = Some(e);
                                 break;
                             }
                         }
                     }
                     
                     bar.finish_and_clear();
-                    if err {
+                    if let Some(e) = err {
+                        println!("{e}");
+                        self.retry += 1;
+                        if self.retry >= self.max_retry {
+                            panic!("process download timer faild: {e}");
+                        }
                         continue;
                     }
                     down_tx.send(id)?;

@@ -343,8 +343,8 @@ impl Task {
 
         if let Some(size) = file_size {
             println!("文件大小: {}", HumanBytes(size));
-            client::debug_print(format!("file_size: {size}"));
         } else {
+            
             println!("无法确定文件大小!");
         }
 
